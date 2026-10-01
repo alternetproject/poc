@@ -1,0 +1,11 @@
+{
+  "name": "client-a",
+  "listen": "127.0.0.1:9101",
+  "peers": [],
+  "allowed_destinations": ["example.com:443"],
+  "relay": true,
+  "blocked_direct": [],
+  "discovery": ["https://entry-one.example:9443", "https://entry-two.example:9443"],
+  "gateway_only": true,
+  "gateway_transport": "curl"
+}

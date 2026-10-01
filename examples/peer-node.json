@@ -1,0 +1,8 @@
+{
+  "name": "my-node",
+  "listen": "0.0.0.0:8081",
+  "bootstrap": ["127.0.0.1:8080"],
+  "peers": [],
+  "relay": true,
+  "allowed_destinations": ["example.com:443"]
+}

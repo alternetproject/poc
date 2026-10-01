@@ -1,0 +1,14 @@
+{
+  "name": "two_shared_entries",
+  "rules": [
+    {"name": "block_entry_one", "blocks": ["entry-one"]},
+    {"name": "block_entry_two", "blocks": ["entry-two"]}
+  ],
+  "workloads": [
+    {"name": "fresh_clients", "kind": "fresh", "weight": 100, "paths": [["entry-one"], ["entry-two"]]},
+    {"name": "returning_clients", "kind": "returning", "weight": 100, "paths": [["entry-one"], ["entry-two"]]},
+    {"name": "entry_one_site", "kind": "ordinary", "weight": 1, "paths": [["entry-one"]]},
+    {"name": "entry_two_site", "kind": "ordinary", "weight": 1, "paths": [["entry-two"]]},
+    {"name": "other_sites", "kind": "ordinary", "weight": 98, "paths": [["other-endpoints"]]}
+  ]
+}

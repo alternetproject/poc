@@ -1,0 +1,8 @@
+{
+  "name": "seed",
+  "listen": "0.0.0.0:8080",
+  "bootstrap": [],
+  "peers": [],
+  "relay": true,
+  "allowed_destinations": ["example.com:443"]
+}

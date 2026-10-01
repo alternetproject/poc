@@ -1,0 +1,8 @@
+{
+  "name": "A",
+  "listen": "127.0.0.1:9101",
+  "peers": ["127.0.0.1:9102", "127.0.0.1:9103"],
+  "allowed_destinations": ["example.com:443"],
+  "relay": true,
+  "blocked_direct": []
+}

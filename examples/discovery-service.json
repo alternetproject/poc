@@ -1,0 +1,17 @@
+{
+  "node": {
+    "name": "entry-one",
+    "listen": "0.0.0.0:9443",
+    "peers": [],
+    "allowed_destinations": ["example.com:443"],
+    "relay": true
+  },
+  "cert": "entry-one-fullchain.pem",
+  "key": "entry-one-key.pem",
+  "state": "entry-one.sqlite",
+  "contacts": ["192.0.2.10:9101", "192.0.2.11:9101", "192.0.2.12:9101"],
+  "bundle_size": 3,
+  "disclosure_budget": 6,
+  "window_seconds": 86400,
+  "lease_seconds": 3600
+}
