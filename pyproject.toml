@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alternet-poc"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[project.scripts]
+alternet = "alternet.cli:main"
+
+[project.optional-dependencies]
+demo = ["cryptography", "curl_cffi==0.16.3"]
+test = ["pytest>=8", "cryptography", "curl_cffi==0.16.3"]
+
+[tool.setuptools.packages.find]
+include = ["alternet", "experiments"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
