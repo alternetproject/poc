@@ -9,3 +9,5 @@ dist/
 *.contacts.json
 .env
 .env.*
+/venv*
+.coverage
