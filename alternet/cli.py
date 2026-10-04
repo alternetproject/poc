@@ -10,48 +10,59 @@ from .client import fetch
 from .config import Config
 from .node import RelayServer
 
+AlternetArgParser = argparse.ArgumentParser(prog="alternet", description="Alternet: minimal direct-first HTTPS routing experiment")
+commands = AlternetArgParser.add_subparsers(dest="command", required=True)
+
+node = commands.add_parser("node", help="run a relay listener")
+node.add_argument("--config", required=True)
+node.add_argument("--ready-file", help=argparse.SUPPRESS)
+
+client = commands.add_parser("fetch", help="fetch an HTTPS URL directly or through peers")
+client.add_argument("--config", required=True)
+client.add_argument("--ca", help="explicit PEM CA file (otherwise use the system trust store)")
+client.add_argument("url")
+
+commands.add_parser("demo", help="run all three local routing scenarios")
+commands.add_parser("demo-discovery", help="demonstrate automatic discovery and recovery under partial blocking")
+commands.add_parser("demo-peers", help="demonstrate open joining, peer exchange, and bootstrap-independent recovery")
+
+peers = commands.add_parser("discover", help="refresh and list reachable peers",
+                            description="Discover peers using configured bootstrap addresses and cached contacts.")
+peers.add_argument("--config", required=True)
+
+shared = commands.add_parser("demo-shared", help="measure shared-endpoint blocking and a selective-blocking counterexample")
+shared.add_argument("--json", action="store_true")
+
+commands.add_parser("demo-carrier", help="test the browser-free libcurl carrier against previous TLS filters")
+
+resilience = commands.add_parser("demo-resilience", help="test entry replacement against rescanning and ciphertext filtering")
+resilience.add_argument("--json", action="store_true")
+resilience.add_argument("--output", help="save the complete measured JSON report")
+resilience.add_argument("--trials", type=int, default=2)
+
+recovery = commands.add_parser("demo-recovery", help="measure continuous recovery versus ongoing IP enumeration")
+recovery.add_argument("--json", action="store_true")
+recovery.add_argument("--output", help="save measured timelines and per-client results as JSON")
+recovery.add_argument("--modes", nargs="+", choices=("unfiltered", "frozen", "continuous_slow", "continuous_fast"),
+                      default=("unfiltered", "frozen", "continuous_slow", "continuous_fast"))
+recovery.add_argument("--step-seconds", type=float, default=2)
+recovery.add_argument("--rounds", type=int, default=6)
+recovery.add_argument("--tail-seconds", type=float, default=5)
+recovery.add_argument("--peer-count", type=int, default=4, help="finite relay-capable population, 4 to 16")
+recovery.add_argument("--client-policy", choices=("supplied", "advertised"), default="supplied",
+                      help="try supplied contact hints on failure, or wait for positive public advertisements")
+
+discovery = commands.add_parser("discovery", help="run an HTTPS discovery service and optional gateway")
+discovery.add_argument("--config", required=True)
+discovery.add_argument("--ready-file", help=argparse.SUPPRESS)
+
+origin = commands.add_parser("_origin", help="internal demo HTTPS fixture")
+for option in ("cert", "key", "body", "ready-file"):
+    origin.add_argument("--" + option, required=True)
+
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="alternet", description="Alternet: minimal direct-first HTTPS routing experiment")
-    commands = parser.add_subparsers(dest="command", required=True)
-    node = commands.add_parser("node", help="run a relay listener")
-    node.add_argument("--config", required=True)
-    node.add_argument("--ready-file", help=argparse.SUPPRESS)
-    client = commands.add_parser("fetch", help="fetch an HTTPS URL directly or through peers")
-    client.add_argument("--config", required=True)
-    client.add_argument("--ca", help="explicit PEM CA file (otherwise use the system trust store)")
-    client.add_argument("url")
-    commands.add_parser("demo", help="run all three local routing scenarios")
-    commands.add_parser("demo-discovery", help="demonstrate automatic discovery and recovery under partial blocking")
-    commands.add_parser("demo-peers", help="demonstrate open joining, peer exchange, and bootstrap-independent recovery")
-    peers = commands.add_parser("discover", help="refresh and list reachable peers",
-                                description="Discover peers using configured bootstrap addresses and cached contacts.")
-    peers.add_argument("--config", required=True)
-    shared = commands.add_parser("demo-shared", help="measure shared-endpoint blocking and a selective-blocking counterexample")
-    shared.add_argument("--json", action="store_true")
-    commands.add_parser("demo-carrier", help="test the browser-free libcurl carrier against previous TLS filters")
-    resilience = commands.add_parser("demo-resilience", help="test entry replacement against rescanning and ciphertext filtering")
-    resilience.add_argument("--json", action="store_true")
-    resilience.add_argument("--output", help="save the complete measured JSON report")
-    resilience.add_argument("--trials", type=int, default=2)
-    recovery = commands.add_parser("demo-recovery", help="measure continuous recovery versus ongoing IP enumeration")
-    recovery.add_argument("--json", action="store_true")
-    recovery.add_argument("--output", help="save measured timelines and per-client results as JSON")
-    recovery.add_argument("--modes", nargs="+", choices=("unfiltered", "frozen", "continuous_slow", "continuous_fast"),
-                          default=("unfiltered", "frozen", "continuous_slow", "continuous_fast"))
-    recovery.add_argument("--step-seconds", type=float, default=2)
-    recovery.add_argument("--rounds", type=int, default=6)
-    recovery.add_argument("--tail-seconds", type=float, default=5)
-    recovery.add_argument("--peer-count", type=int, default=4, help="finite relay-capable population, 4 to 16")
-    recovery.add_argument("--client-policy", choices=("supplied", "advertised"), default="supplied",
-                          help="try supplied contact hints on failure, or wait for positive public advertisements")
-    discovery = commands.add_parser("discovery", help="run an HTTPS discovery service and optional gateway")
-    discovery.add_argument("--config", required=True)
-    discovery.add_argument("--ready-file", help=argparse.SUPPRESS)
-    origin = commands.add_parser("_origin", help="internal demo HTTPS fixture")
-    for option in ("cert", "key", "body", "ready-file"):
-        origin.add_argument("--" + option, required=True)
-    args = parser.parse_args(argv)
+    args = AlternetArgParser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     if args.command.startswith("demo"):
         logging.getLogger("alternet").setLevel(logging.WARNING)
