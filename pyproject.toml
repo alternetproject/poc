@@ -22,3 +22,17 @@ include = ["alternet", "experiments"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# pytest --cov=alternet-poc -vv --doctest-modules -p no:cacheprovider --showlocals ./tests/
+addopts = [
+    "--import-mode=importlib",  # recommended when not using src/ layout
+    "--cov=.",                  # generate coverage report
+    "--verbose",                # default to -v; can override w/-vv etc
+    "--doctest-modules",        # look for doctests too; may use for utility funcs
+    "-p no:cacheprovider",      # don't create test .cache dirs
+    "--showlocals",             # display var values along with stacktrace on error
+]
+
+[tool.coverage.report]
+skip_empty = true               # exclude empty __init__.py files from report
+show_missing = true             # include missing lines in coverage report
+
