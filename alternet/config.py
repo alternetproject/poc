@@ -5,22 +5,53 @@ import re
 from urllib.parse import urlsplit
 
 
+class InvalidAddressError(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class Address:
     host: str
     port: int
 
     @classmethod
-    def parse(cls, value: str, *, allow_zero: bool = False) -> "Address":
-        if not isinstance(value, str) or any(c.isspace() for c in value):
-            raise ValueError("addresses must be host:port strings without whitespace")
-        parsed = urlsplit("//" + value)
-        if (not parsed.hostname or parsed.port is None or parsed.username is not None
-                or parsed.password is not None or parsed.path or parsed.query or parsed.fragment):
-            raise ValueError(f"invalid host:port address: {value!r}")
+    def valid_address(cls, s: str, allow_zero: bool = False):
+        """returns named tuple of hostname properties if `s` is valid hostname, else raises InvalidAddressError
+
+        properties of named tuple upon success are described here
+        https://docs.python.org/3/library/urllib.parse.html#urllib.parse.urlsplit
+
+        to flesh out see https://www.rfc-editor.org/info/rfc1035/ for 1987 def
+        and https://en.wikipedia.org/wiki/Internationalized_domain_name
+        """
+        if not isinstance(s, str):
+            raise InvalidAddressError(f'Address.host {s} must be str')
+        if re.search(r'\s', s):
+            raise InvalidAddressError(f'Address.host {s} cannot contain whitespace')
+
+        parsed = urlsplit(f"//{s}")
+        if  not parsed.hostname \
+            or parsed.port is None \
+            or parsed.username is not None \
+            or parsed.password is not None \
+            or parsed.path \
+            or parsed.query \
+            or parsed.fragment:
+            raise InvalidAddressError(f"invalid host:port address: {s!r}")
+
+        # urlib.parse.urlsplit() raises Port out of range 0-65535
         if not (0 if allow_zero else 1) <= parsed.port <= 65535:
-            raise ValueError(f"invalid port: {parsed.port}")
+            raise InvalidAddressError(f"invalid port: {parsed.port}")
+
+        return parsed
+
+
+    @classmethod
+    def parse(cls, value: str, allow_zero: bool = False) -> "Address":
+    #test remove *#def parse(cls, value: str, *, allow_zero: bool = False) -> "Address":
+        parsed = cls.valid_address(value, allow_zero)
         return cls(parsed.hostname.encode("idna").decode("ascii").lower(), parsed.port)
+
 
     def __str__(self) -> str:
         host = f"[{self.host}]" if ":" in self.host else self.host
