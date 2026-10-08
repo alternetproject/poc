@@ -22,7 +22,7 @@ include = ["alternet", "experiments"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# pytest --cov=alternet-poc -vv --doctest-modules -p no:cacheprovider --showlocals ./tests/
+# pytest --cov=. -vv --doctest-modules -p no:cacheprovider --showlocals ./tests/
 addopts = [
     "--import-mode=importlib",  # recommended when not using src/ layout
     "--cov=.",                  # generate coverage report
