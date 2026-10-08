@@ -19,18 +19,26 @@ MAX_BODY = 16384
 PATH = "/v1/node-peers"
 
 
+def create_peerdb(path: str = ":memory:", timeout: int = 1, check_same_thread: bool = False):
+    """Creates sqlite db & returns database handle"""
+    dbh = sqlite3.connect(path, timeout=timeout, check_same_thread=check_same_thread)
+    # review: want PRAGMA JOURNAL_MODE = 'WAL'? https://www.sqlite.org/wal.html
+    dbh.row_factory = sqlite3.Row
+    dbh.execute("""CREATE TABLE IF NOT EXISTS peers (
+        address TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
+        relay INTEGER NOT NULL DEFAULT 0, expires REAL NOT NULL DEFAULT 0,
+        checked REAL NOT NULL DEFAULT 0, retry REAL NOT NULL DEFAULT 0,
+        failures INTEGER NOT NULL DEFAULT 0, seed INTEGER NOT NULL DEFAULT 0)""")
+    dbh.commit()
+    return dbh
+
+
 class PeerBook:
+    # why accept None for path instead of default ":memory:"?
     def __init__(self, path: str | None = None):
         self.lock = threading.RLock()
         self.closed = False
-        self.db = sqlite3.connect(path or ":memory:", timeout=1, check_same_thread=False)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("""CREATE TABLE IF NOT EXISTS peers (
-            address TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
-            relay INTEGER NOT NULL DEFAULT 0, expires REAL NOT NULL DEFAULT 0,
-            checked REAL NOT NULL DEFAULT 0, retry REAL NOT NULL DEFAULT 0,
-            failures INTEGER NOT NULL DEFAULT 0, seed INTEGER NOT NULL DEFAULT 0)""")
-        self.db.commit()
+        self.db = create_peerdb(path or ":memory:")
 
     @contextmanager
     def transaction(self):
@@ -49,13 +57,21 @@ class PeerBook:
     def __enter__(self):
         return self
 
+    # it looks like PeerDiscovery.close() directly calls PeerBook.close()
+    # should it be refactored to use ContextManager style?
     def __exit__(self, *_args):
         self.close()
 
+    # mnemonic?  def could use docstring...
+    # 1. if address exists, SET seed=1 for address & return
+    # 2. check if >= CAPACITY, if so & there is 1 expired address, delete it
+    # 3. should now have capacity to insert new (address, seed)
     def hint(self, address: Address, *, seed=False):
         with self.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
+            # try UPDATE / catch: pass?
             if db.execute("SELECT 1 FROM peers WHERE address=?", (str(address),)).fetchone():
+                # perhaps SELECT seed in case it is already 1 & skip UPDATE?
                 if seed:
                     db.execute("UPDATE peers SET seed=1 WHERE address=?", (str(address),))
                 return
@@ -78,6 +94,7 @@ class PeerBook:
         with self.transaction() as db:
             row = db.execute("SELECT failures FROM peers WHERE address=?", (str(address),)).fetchone()
             if row:
+                # what is magic number 5?
                 count = min(row[0] + 1, 5)
                 db.execute("UPDATE peers SET expires=0, checked=?, retry=?, failures=? WHERE address=?",
                            (now, now + min(60, 2 ** count), count, str(address)))

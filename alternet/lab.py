@@ -18,6 +18,7 @@ DEMO_BODY = b"Hello from an ordinary HTTPS server, reached with Alternet.\n"
 
 def make_certificates(directory: Path, hostname: str = "localhost", *,
                       extra_hosts: tuple[str, ...] = ()) -> tuple[Path, Path, Path]:
+    # is there a use-case for alternet w/out cryptography?
     try:
         from cryptography import x509
         from cryptography.hazmat.primitives import hashes, serialization

@@ -154,6 +154,7 @@ class RelayServer(socketserver.ThreadingTCPServer):
         if ":" in config.listen.host:
             self.address_family = socket.AF_INET6
         super().__init__((config.listen.host, config.listen.port), RelayHandler)
+        # circular dependency issue?
         from .peer_discovery import PeerDiscovery
         try:
             self.peer_discovery = PeerDiscovery(config, listen=Address(*self.server_address[:2]),
