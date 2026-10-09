@@ -20,11 +20,20 @@ MAX_HOPS = 3
 MAX_HEADER = 16 * 1024
 
 
+@dataclass
+class Route:
+    socket: socket.socket
+    nodes: tuple[str, ...]
+
+
+# should be RuntimeError or something else, changing it causes tests to fail
+# 10 failed, 145 passed, 1 skipped, 14 warnings, 11 errors in 62.81s (0:01:02)
 class RouteError(OSError):
     pass
 
 
 def remaining(deadline: float) -> float:
+    """return float: how many seconds remain until deadline?"""
     value = deadline - time.monotonic()
     if value <= 0:
         raise TimeoutError("route establishment deadline expired")
@@ -33,6 +42,9 @@ def remaining(deadline: float) -> float:
 
 def connect_tcp(address: Address, deadline: float) -> socket.socket:
     deadline = min(deadline, time.monotonic() + CONNECT_TIMEOUT)
+
+    # queue.Queue(maxsize=1) is blocking FIFO
+    # being used here to force non-async threading?
     results = queue.Queue(maxsize=1)
 
     def resolve() -> None:
@@ -48,6 +60,7 @@ def connect_tcp(address: Address, deadline: float) -> socket.socket:
         raise TimeoutError(f"DNS timeout for {address.host}") from exc
     if error:
         raise error
+
     last_error = None
     for family, kind, protocol, _, sockaddr in addresses:
         sock = socket.socket(family, kind, protocol)
@@ -58,6 +71,7 @@ def connect_tcp(address: Address, deadline: float) -> socket.socket:
         except OSError as exc:
             last_error = exc
             sock.close()
+
     raise RouteError(f"cannot connect to {address}: {last_error}")
 
 
@@ -112,12 +126,6 @@ def parse_request(first: str, headers: dict[str, str]) -> tuple[Address, tuple[s
         return Address.parse(target), tuple(visited), hops, budget
     except (ValueError, KeyError, TypeError) as exc:
         raise RouteError(f"invalid CONNECT request: {exc}") from exc
-
-
-@dataclass
-class Route:
-    socket: socket.socket
-    nodes: tuple[str, ...]
 
 
 def open_route(config: Config, target: Address, *, visited: tuple[str, ...] = (),
