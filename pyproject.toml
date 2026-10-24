@@ -9,13 +9,20 @@ requires-python = ">=3.11"
 dependencies = [
     "cryptography",
     "curl_cffi==0.16.3",
+    # not project dependencies, but security requirements
+    # ===================================================
+    "pip>=21.1",  # CVE-2021-3572
 ]
 
 [project.scripts]
 alternet = "alternet.cli:main"
+powdemo = "alternet.pow:demo"
 
 [project.optional-dependencies]
-test = ["pytest>=8", "pytest-cov"]
+test = [
+    "pytest>=8",
+    "pytest-cov",
+]
 
 [tool.setuptools.packages.find]
 include = ["alternet", "experiments"]
