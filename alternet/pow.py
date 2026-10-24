@@ -60,7 +60,7 @@ def find_nonce(input_string, level=1, verbose=False):
     count = 0
     search = '0' * level
     while True:
-        nonce = random.randint(10, 1000000)
+        nonce = random.randint(10, 9999999)
         h = _gen_hash(input_string, nonce, verbose)
         if h.startswith(search):
             return nonce
@@ -71,7 +71,7 @@ def find_nonce(input_string, level=1, verbose=False):
         count += 1
 
 
-def test_nonce(nonce, input_string, level=1, verbose=True):
+def test_nonce(nonce, input_string, level=1, verbose=False):
     if verbose:
         print(f'lvl {level:>2} nonce {nonce:>8} str {input_string}', file=sys.stderr)
     search = '0' * level
