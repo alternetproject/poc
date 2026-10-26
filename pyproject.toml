@@ -7,8 +7,8 @@ name = "alternet-poc"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "cryptography",
-    "curl_cffi==0.16.3",
+    "cryptography>=42.0",  # not_valid_before_utc introduced in 42
+    "curl_cffi==0.16.3",   # TODO: comment why not >=
     # not project dependencies, but security requirements
     # ===================================================
     "pip>=21.1",  # CVE-2021-3572

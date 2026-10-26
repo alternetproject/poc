@@ -31,7 +31,7 @@ import sys
 import time
 
 
-GIVEUP_COUNT = 1000000
+GIVEUP_COUNT = 99_999_999
 
 
 # From the Plack docs: "The middleware uses SHA-256 hashing and requires
@@ -66,7 +66,7 @@ def find_nonce(input_string, level=1, verbose=False):
             return nonce
 
         if count == GIVEUP_COUNT:
-            raise RuntimeError(f'GIVEUP_COUNT hash not found for {input_string}')
+            raise RuntimeError(f'GIVEUP_COUNT reached; hash not found for {input_string}')
 
         count += 1
 

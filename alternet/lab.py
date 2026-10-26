@@ -10,60 +10,110 @@ import sys
 import tempfile
 import threading
 import time
+import warnings
+
+# cryptography is stdlib, but optional, it may not be present
+try:
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+except ImportError as exc:
+    warnings.warn("cryptography not present; serving demos will not work & some tests may fail")
 
 from .config import Address, Config
 
+
 DEMO_BODY = b"Hello from an ordinary HTTPS server, reached with Alternet.\n"
+CA_DEFAULT_NAME = "Alternet temporary demo CA"
 
 
-def make_certificates(directory: Path, hostname: str = "localhost", *,
-                      extra_hosts: tuple[str, ...] = ()) -> tuple[Path, Path, Path]:
-    # is there a use-case for alternet w/out cryptography?
-    try:
-        from cryptography import x509
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import rsa
-        from cryptography.x509.oid import NameOID
-    except ImportError as exc:
-        raise RuntimeError("Install cryptography to run demos and tests: python -m pip install cryptography") from exc
+def make_private_key() -> rsa.RSAPrivateKey:
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
+
+def make_ca(private_key: rsa.RSAPrivateKey, directory: Path, name: str = CA_DEFAULT_NAME) -> tuple[x509.Certificate, Path]:
+    """creates a temporary CA certificate for signing, and writes file ca.pem to directory
+
+    this certificate is intended only for demo & test contexts; it will expire in 1 day
+
+    returns 2-tuple (x509.Certificate, Path) where Path is location of ca.pem
+    """
     now = datetime.now(timezone.utc)
-    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Alternet temporary demo CA")])
-    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name)
-          .public_key(ca_key.public_key()).serial_number(x509.random_serial_number())
-          .not_valid_before(now - timedelta(minutes=5)).not_valid_after(now + timedelta(days=1))
-          .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-          .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
-          .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
-          .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=False,
-                                      key_encipherment=False, data_encipherment=False,
-                                      key_agreement=False, key_cert_sign=True, crl_sign=True,
-                                      encipher_only=None, decipher_only=None), critical=True)
-          .sign(ca_key, hashes.SHA256()))
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    builder = x509.CertificateBuilder() \
+                  .subject_name(ca_name) \
+                  .issuer_name(ca_name) \
+                  .public_key(public_key) \
+                  .serial_number(x509.random_serial_number()) \
+                  .not_valid_before(now - timedelta(minutes=5)) \
+                  .not_valid_after(now + timedelta(days=1)) \
+                  .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True) \
+                  .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False) \
+                  .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False) \
+                  .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=False,
+                                               key_encipherment=False, data_encipherment=False,
+                                               key_agreement=False, key_cert_sign=True, crl_sign=True,
+                                               encipher_only=None, decipher_only=None), critical=True)
+    ca = builder.sign(private_key, hashes.SHA256())
+
+    ca_path = directory / "ca.pem"
+    ca_path.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
+    return ca, ca_path
+
+
+def make_cert(ca: x509.Certificate, ca_key: rsa.RSAPrivateKey, directory: Path, hostname: str = "localhost",
+              extra_hosts: tuple[str, ...] = ()) -> tuple[Path, Path]:
+    """creates cert for server signed by ca using ca's private ca_key
+
+    files server.pem & server-key.pem are written to directory for public & private keys respectively
+
+    this certificate is intended only for demo & test contexts; it will expire in 1 day
+
+    returns 2-tuple (Path, Path) for server.pem, server-key.pem"""
+    now = datetime.now(timezone.utc)
+    private_key = make_private_key()
+    public_key = private_key.public_key()
+
     names = []
-    for host in dict.fromkeys((hostname, *extra_hosts)):
+    for host in [hostname, *extra_hosts]:
         try:
             names.append(x509.IPAddress(ipaddress.ip_address(host)))
         except ValueError:
             names.append(x509.DNSName(host))
-    cert = (x509.CertificateBuilder()
-            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)]))
-            .issuer_name(ca_name).public_key(key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(now - timedelta(minutes=5)).not_valid_after(now + timedelta(days=1))
-            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
-            .add_extension(x509.SubjectAlternativeName(names), critical=False)
-            .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .sign(ca_key, hashes.SHA256()))
-    ca_path, cert_path, key_path = (directory / filename for filename in ("ca.pem", "server.pem", "server-key.pem"))
-    ca_path.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
+
+    builder = x509.CertificateBuilder() \
+                  .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)])) \
+                  .issuer_name(ca.subject) \
+                  .public_key(public_key) \
+                  .serial_number(x509.random_serial_number()) \
+                  .not_valid_before(now - timedelta(minutes=5)) \
+                  .not_valid_after(now + timedelta(days=1)) \
+                  .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True) \
+                  .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False) \
+                  .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False) \
+                  .add_extension(x509.SubjectAlternativeName(names), critical=False) \
+                  .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+    cert = builder.sign(ca_key, hashes.SHA256())
+
+    cert_path, key_path = (directory / filename for filename in ("server.pem", "server-key.pem"))
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                         serialization.NoEncryption()))
+    key_path.write_bytes(private_key.private_bytes(serialization.Encoding.PEM,
+                                                   serialization.PrivateFormat.PKCS8,
+                                                   serialization.NoEncryption()))
+    return cert_path, key_path
+
+
+def make_certificates(directory: Path, hostname: str = "localhost",
+                      extra_hosts: tuple[str, ...] = ()) -> tuple[Path, Path, Path]:
+    """creates ca.pem, server.pem, server-key.pem in directory
+
+    A temporary CA is created, and used to sign cert for server
+    """
+    ca_key = make_private_key()
+    ca, ca_path = make_ca(ca_key, directory)
+    cert_path, key_path = make_cert(ca, ca_key, directory, hostname, extra_hosts)
     return ca_path, cert_path, key_path
 
 
@@ -111,7 +161,7 @@ def serve_origin(cert: str, key: str, body_path: str, ready_file: str) -> None:
 
 
 class Child:
-    def __init__(self, arguments: list[str], ready: Path, *, echo: bool):
+    def __init__(self, arguments: list[str], ready: Path, echo: bool):
         self.lines: list[str] = []
         self.process = subprocess.Popen(
             [sys.executable, "-u", "-m", "alternet", *arguments, "--ready-file", str(ready)],
@@ -155,7 +205,7 @@ class Child:
 
 
 class Lab:
-    def __init__(self, *, echo: bool = False, cert_hostname: str = "localhost", body: bytes = DEMO_BODY,
+    def __init__(self, echo: bool = False, cert_hostname: str = "localhost", body: bytes = DEMO_BODY,
                  cert_extra_hosts: tuple[str, ...] = ()):
         self.echo = echo
         self.cert_hostname = cert_hostname
@@ -189,7 +239,7 @@ class Lab:
         self.children.append(child)
         return child
 
-    def config(self, name: str, *, peers: tuple[Address, ...] = (), blocked: bool = False,
+    def config(self, name: str, peers: tuple[Address, ...] = (), blocked: bool = False,
                relay: bool = True, target: Address | None = None) -> Config:
         target = self.target if target is None else target
         return Config(name, Address("127.0.0.1", 0), tuple(peers), frozenset({target}), relay,
@@ -208,7 +258,7 @@ class Lab:
         path.write_text(json.dumps(self.configs[config.name].to_dict(), indent=2), encoding="utf-8")
         return child
 
-    def start_discovery(self, name: str, contacts: tuple[Address, ...], *, relay: bool = True,
+    def start_discovery(self, name: str, contacts: tuple[Address, ...], relay: bool = True,
                         bundle_size: int = 3, disclosure_budget: int = 6,
                         blocked: bool = False, site_root: str | None = None) -> tuple[Child, str]:
         listen = Address("127.0.0.1", 0)

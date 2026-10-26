@@ -8,7 +8,10 @@ import time
 
 from .client import fetch
 from .config import Config
+from .discovery import DiscoveryServer, ServiceConfig
+from .lab import write_ready, serve_origin
 from .node import RelayServer
+from .peer_discovery import PeerDiscovery
 
 AlternetArgParser = argparse.ArgumentParser(prog="alternet", description="Alternet: minimal direct-first HTTPS routing experiment")
 commands = AlternetArgParser.add_subparsers(dest="command", required=True)
@@ -68,7 +71,6 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger("alternet").setLevel(logging.WARNING)
     try:
         if args.command == "node":
-            from .lab import write_ready
             config = Config.load(args.config)
             with RelayServer(config) as server:
                 logging.info("[%s] listening on %s:%s; relay=%s", config.name,
@@ -90,7 +92,6 @@ def main(argv: list[str] | None = None) -> int:
             from .peer_demo import run
             run()
         elif args.command == "discover":
-            from .peer_discovery import PeerDiscovery
             config = Config.load(args.config)
             if config.gateway_only:
                 raise ValueError("ordinary peer discovery is disabled in gateway_only mode")
@@ -119,8 +120,6 @@ def main(argv: list[str] | None = None) -> int:
                 step_seconds=args.step_seconds, rounds=args.rounds, tail_seconds=args.tail_seconds,
                 peer_count=args.peer_count, client_policy=args.client_policy)
         elif args.command == "discovery":
-            from .discovery import DiscoveryServer, ServiceConfig
-            from .lab import write_ready
             config = ServiceConfig.load(args.config)
             with DiscoveryServer(config) as server:
                 logging.info("[%s] HTTPS discovery listening on %s:%s; gateway=%s", config.node.name,
@@ -128,7 +127,6 @@ def main(argv: list[str] | None = None) -> int:
                 write_ready(args.ready_file, server.server_address)
                 server.serve_forever(poll_interval=0.1)
         else:
-            from .lab import serve_origin
             serve_origin(args.cert, args.key, args.body, args.ready_file)
     except KeyboardInterrupt:
         logging.info("Stopped.")
