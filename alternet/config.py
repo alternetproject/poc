@@ -15,7 +15,7 @@ class Address:
     port: int
 
     @classmethod
-    def valid_address(cls, s: str, allow_zero: bool = False):
+    def validate_address(cls, s: str, allow_zero: bool = False):
         """returns named tuple of hostname properties if `s` is valid hostname, else raises InvalidAddressError
 
         properties of named tuple upon success are described here
@@ -49,7 +49,7 @@ class Address:
     @classmethod
     def parse(cls, value: str, allow_zero: bool = False) -> "Address":
     #test remove *#def parse(cls, value: str, *, allow_zero: bool = False) -> "Address":
-        parsed = cls.valid_address(value, allow_zero)
+        parsed = cls.validate_address(value, allow_zero)
         return cls(parsed.hostname.encode("idna").decode("ascii").lower(), parsed.port)
 
 
